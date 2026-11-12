@@ -1,4 +1,5 @@
 
+import re
 from pathlib import Path
 
 from pypdf import PdfReader
@@ -22,9 +23,12 @@ def load_document(file_path: str) -> list[dict]:
         for page_number, page in enumerate(reader.pages, start=1):
             text = page.extract_text() or ""
 
-            if text.strip():
+            # Normalize excessive whitespace from PDF extraction.
+            text = re.sub(r"\s+", " ", text).strip()
+
+            if text:
                 documents.append({
-                    "text": text.strip(),
+                    "text": text,
                     "metadata": {
                         "source": path.name,
                         "page_number": page_number,

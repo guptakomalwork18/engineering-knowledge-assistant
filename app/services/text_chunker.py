@@ -31,6 +31,16 @@ def split_into_chunks(
         while start < len(text):
             end = min(start + chunk_size, len(text))
 
+            # Find a word boundary instead of cutting mid-word.
+            if end < len(text):
+                boundary = text.rfind(" ", start, end)
+
+                if boundary <= start:
+                    boundary = text.find(" ", end)
+
+                if boundary != -1:
+                    end = boundary
+
             chunk_text = text[start:end].strip()
 
             if chunk_text:
@@ -44,11 +54,22 @@ def split_into_chunks(
 
                 chunk_index += 1
 
-            # Stop when we have reached the end of the document.
-            if end == len(text):
+            if end >= len(text):
                 break
 
-            # Move forward while retaining the configured overlap.
-            start = end - overlap
+            # Calculate the next starting position while retaining overlap.
+            next_start = max(0, end - overlap)
+
+            # Move the start to a word boundary.
+            next_boundary = text.find(" ", next_start, end)
+
+            if next_boundary != -1:
+                next_start = next_boundary + 1
+
+            # Safety check to guarantee forward progress.
+            if next_start <= start:
+                next_start = end
+
+            start = next_start
 
     return chunks
