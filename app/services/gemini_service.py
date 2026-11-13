@@ -2,8 +2,10 @@ from google import genai
 
 from app.config import GEMINI_API_KEY, GEMINI_MODEL
 
-client = genai.Client(api_key=GEMINI_API_KEY)
-
+client = genai.Client(
+    api_key=GEMINI_API_KEY,
+    http_options={"timeout": 30000},
+)
 
 def generate_response(prompt: str) -> str:
     interaction = client.interactions.create(
