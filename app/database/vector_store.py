@@ -2,9 +2,13 @@ import uuid
 
 import chromadb
 
+from pathlib import Path
 
 # Create a persistent ChromaDB client.
-client = chromadb.PersistentClient(path="chroma_db")
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+CHROMA_DB_PATH = PROJECT_ROOT / "chroma_db"
+
+client = chromadb.PersistentClient(path=str(CHROMA_DB_PATH))
 
 # Create or reuse our document collection.
 collection = client.get_or_create_collection(
@@ -12,7 +16,6 @@ collection = client.get_or_create_collection(
     embedding_function=None,
     metadata={"hnsw:space": "cosine"},
 )
-
 
 
 def store_chunks(chunks: list[dict], embeddings: list[list[float]]) -> list[str]:
@@ -43,25 +46,23 @@ def store_chunks(chunks: list[dict], embeddings: list[list[float]]) -> list[str]
     existing_ids = set(existing_records["ids"])
 
     ids = [
-        str(uuid.uuid5(
-            uuid.NAMESPACE_URL,
-            (
-                f"{source}:"
-                f"{chunk['metadata'].get('page_number')}:"
-                f"{chunk['metadata']['chunk_index']}"
-            ),
-        ))
+        str(
+            uuid.uuid5(
+                uuid.NAMESPACE_URL,
+                (
+                    f"{source}:"
+                    f"{chunk['metadata'].get('page_number')}:"
+                    f"{chunk['metadata']['chunk_index']}"
+                ),
+            )
+        )
         for chunk in chunks
     ]
 
     documents = [chunk["text"] for chunk in chunks]
 
     metadatas = [
-        {
-            key: value
-            for key, value in chunk["metadata"].items()
-            if value is not None
-        }
+        {key: value for key, value in chunk["metadata"].items() if value is not None}
         for chunk in chunks
     ]
 
@@ -81,7 +82,6 @@ def store_chunks(chunks: list[dict], embeddings: list[list[float]]) -> list[str]
         collection.delete(ids=obsolete_ids)
 
     return ids
-
 
 
 def search_chunks(
@@ -107,3 +107,16 @@ def search_chunks(
     )
 
     return results
+
+
+def count_chunks_for_source(source: str) -> int:
+    """
+    Return the number of chunks stored for a document.
+    """
+
+    records = collection.get(
+        where={"source": source},
+        include=["metadatas"],
+    )
+
+    return len(records["ids"])

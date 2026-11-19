@@ -1,88 +1,98 @@
-import tempfile
-import traceback
-from pathlib import Path
+import logging
 
 import streamlit as st
 
-from app.services.ingestion_service import ingest_document
 from app.services.rag_service import answer_question
 from app.services.gemini_service import GeminiServiceError
+from app.services.knowledge_base_service import initialize_knowledge_base
+
+# Configure application logging.
+logging.basicConfig(level=logging.INFO)
 
 # Configure the Streamlit application.
 st.set_page_config(
     page_title="Engineering Knowledge Assistant",
-    page_icon="🧠",
+    page_icon="📚",
     layout="wide",
 )
 
 
-# Application heading.
-st.title("Engineering Knowledge Assistant")
+# Cache the knowledge-base initialization result.
+# This prevents unnecessary initialization on Streamlit reruns.
+@st.cache_resource(show_spinner="Preparing the engineering knowledge base...")
+def prepare_knowledge_base() -> dict:
+    return initialize_knowledge_base()
 
-st.caption("Your AI-powered assistant for exploring " "engineering documentation.")
+
+# Application heading.
+st.title("📚 Engineering Knowledge Assistant")
+
+st.caption(
+    "An AI-powered assistant that answers engineering questions "
+    "using document retrieval and Generative AI."
+)
 
 st.divider()
 
 
-# Document upload section.
-st.header("1. Upload Engineering Documents")
+# Initialize the knowledge base before accepting questions.
+st.header("Knowledge Base Status")
+
+try:
+    knowledge_base_status = prepare_knowledge_base()
+
+    st.success("Knowledge base is ready.")
+
+    for document in knowledge_base_status["documents"]:
+        st.markdown(f"- **{document['document']}** " f"({document['chunks']} chunks)")
+
+except Exception:
+    logging.exception("Knowledge-base initialization failed")
+
+    st.error("The knowledge base could not be initialized. " "Please try again later.")
+
+    st.stop()
+
+
+st.divider()
+
+
+# Display information about the available knowledge base.
+st.header("Available Knowledge Base")
 
 st.write(
-    "Upload PDF, TXT, or Markdown documents "
-    "to build your engineering knowledge base."
+    "This demo uses a curated collection of engineering documents. "
+    "Ask questions about the information contained in these documents."
 )
 
-uploaded_file = st.file_uploader(
-    "Choose an engineering document",
-    type=["pdf", "txt", "md"],
-)
+st.markdown("- `sample_kafka_notes.md`")
+st.markdown("- `sample_kafka_notes.pdf`")
 
-if uploaded_file is not None:
-    st.write(f"Selected file: **{uploaded_file.name}**")
-
-    if st.button("Process Document"):
-        try:
-            with st.spinner("Processing document and generating embeddings..."):
-                # Create a temporary directory.
-                with tempfile.TemporaryDirectory() as temp_dir:
-
-                    # Preserve the original filename.
-                    safe_filename = Path(uploaded_file.name).name
-                    file_path = Path(temp_dir) / safe_filename
-
-                    # Save the uploaded file temporarily.
-                    file_path.write_bytes(uploaded_file.getvalue())
-
-                    # Pass the temporary file path to our backend.
-                    result = ingest_document(str(file_path))
-
-            st.success("Document processed successfully!")
-
-            st.write(f"**Document:** {uploaded_file.name}")
-            st.write(f"**Pages or sections:** " f"{result['pages_or_sections']}")
-            st.write(f"**Chunks created:** {result['chunks_created']}")
-            st.write(f"**Chunks stored:** {result['chunks_stored']}")
-
-        except Exception as error:
-            traceback.print_exc()
-            st.error(f"Document processing failed: {error}")
-
+st.info("This is a read-only public demo. Document uploads are disabled.")
 
 st.divider()
 
 
 # Question and answer section.
-st.header("2. Ask Engineering Questions")
+st.header("Ask Engineering Questions")
 
-st.write("Ask questions based on the documents " "you have uploaded.")
+st.write(
+    "Ask a question about Apache Kafka and the assistant "
+    "will retrieve relevant information from the knowledge base."
+)
 
 question = st.text_area(
     "Enter your engineering question:",
-    placeholder="Example: How does Kafka handle parallel processing?",
+    placeholder=(
+        "Example: How does Kafka distribute messages "
+        "among consumers in a consumer group?"
+    ),
     height=100,
+    max_chars=1000,
 )
 
 if st.button("Ask Assistant", type="primary"):
+
     if not question.strip():
         st.warning("Please enter a question.")
 
@@ -90,7 +100,7 @@ if st.button("Ask Assistant", type="primary"):
         try:
             with st.spinner("Searching documents and generating your answer..."):
                 result = answer_question(
-                    question=question,
+                    question=question.strip(),
                     n_results=3,
                 )
 
@@ -100,6 +110,7 @@ if st.button("Ask Assistant", type="primary"):
             st.subheader("Sources")
 
             if result["sources"]:
+
                 for source in result["sources"]:
                     page = source["page_number"]
 
@@ -112,19 +123,29 @@ if st.button("Ask Assistant", type="primary"):
                         f"- **{source['reference']}** — "
                         f"{source['source']} ({location})"
                     )
+
             else:
-                st.info("No relevant sources were found.")
+                st.info(
+                    "No relevant sources were found. " "Please try another question."
+                )
 
         except GeminiServiceError as error:
-            traceback.print_exc()
+            logging.exception("Gemini service error")
 
             st.warning(error.user_message)
 
             st.caption(f"Technical error category: {error.category}")
 
-        except Exception as error:
-            traceback.print_exc()
+        except Exception:
+            logging.exception("Unexpected application error")
 
             st.error(
                 "An unexpected application error occurred. " "Please try again later."
             )
+
+
+st.divider()
+
+st.caption(
+    "Engineering Knowledge Assistant | " "Powered by Gemini, ChromaDB and Streamlit"
+)

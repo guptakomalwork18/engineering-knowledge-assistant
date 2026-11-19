@@ -16,3 +16,15 @@ __pycache__/
 
 # ChromaDB local vector database
 chroma_db/
+
+# Logs
+*.log
+
+# Test and coverage artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Docker and local development overrides
+.env.local
+docker-compose.override.yml
