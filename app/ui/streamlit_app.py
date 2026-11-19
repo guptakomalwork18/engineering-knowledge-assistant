@@ -1,6 +1,16 @@
+# Standard library imports
 import logging
+import sys
+from pathlib import Path
 
+# Third-party imports
 import streamlit as st
+
+# Add the project root to Python's module search path.
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from app.services.rag_service import answer_question
 from app.services.gemini_service import GeminiServiceError
